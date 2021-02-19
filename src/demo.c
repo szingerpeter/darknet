@@ -138,7 +138,7 @@ double get_wall_time()
 
 void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int cam_index, const char *filename, char **names, int classes, int avgframes,
     int frame_skip, char *prefix, char *out_filename, int mjpeg_port, int dontdraw_bbox, int json_port, int dont_show, int ext_output, int letter_box_in, int time_limit_sec, char *http_post_host,
-    int benchmark, int benchmark_layers)
+    int benchmark, int benchmark_layers, char *outfile)
 {
     if (avgframes < 1) avgframes = 1;
     avg_frames = avgframes;
@@ -170,6 +170,16 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     }else{
         printf("Webcam index: %d\n", cam_index);
         cap = get_capture_webcam(cam_index);
+    }
+
+    FILE* json_file = NULL;
+    if (outfile) {
+        json_file = fopen(outfile, "wb");
+        if(!json_file) {
+        error("fopen failed");
+        }
+        char *tmp = "[\n";
+        fwrite(tmp, sizeof(char), strlen(tmp), json_file);
     }
 
     if (!cap) {
@@ -278,6 +288,18 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
             //printf("\033[1;1H");
             //printf("\nFPS:%.1f\n", fps);
             printf("Objects:\n\n");
+            
+            if (json_file) {
+                if (json_buf) {
+                    char *tmp = ", \n";
+                    fwrite(tmp, sizeof(char), strlen(tmp), json_file);
+                }
+                ++json_image_id;
+                json_buf = detection_to_json(dets, nboxes, l.classes, names, json_image_id, input);
+
+                fwrite(json_buf, sizeof(char), strlen(json_buf), json_file);
+                free(json_buf);
+            }
 
             ++frame_id;
             if (demo_json_port > 0) {
@@ -391,6 +413,12 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
         printf("output_video_writer closed. \n");
     }
 
+    if (json_file) {
+        char *tmp = "\n]";
+        fwrite(tmp, sizeof(char), strlen(tmp), json_file);
+        fclose(json_file);
+    }
+
     this_thread_sleep_for(thread_wait_ms);
 
     custom_join(detect_thread, 0);
@@ -422,7 +450,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
 #else
 void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int cam_index, const char *filename, char **names, int classes, int avgframes,
     int frame_skip, char *prefix, char *out_filename, int mjpeg_port, int dontdraw_bbox, int json_port, int dont_show, int ext_output, int letter_box_in, int time_limit_sec, char *http_post_host,
-    int benchmark, int benchmark_layers)
+    int benchmark, int benchmark_layers, char *outfile)
 {
     fprintf(stderr, "Demo needs OpenCV for webcam images.\n");
 }
